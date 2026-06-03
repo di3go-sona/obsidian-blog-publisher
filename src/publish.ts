@@ -2,15 +2,36 @@ import { exec } from "child_process";
 import type { BlogPublisherSettings } from "./settings";
 import { log, notify, notifyError } from "./utils";
 
+function getShellEnv(): { PATH: string; [k: string]: string } {
+  const defaultPaths = [
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+  ];
+  const existingPath = process.env.PATH || "";
+  const merged = [
+    ...defaultPaths.filter((p) => !existingPath.includes(p)),
+    ...existingPath.split(":"),
+  ].join(":");
+  return { ...process.env, PATH: merged } as { PATH: string; [k: string]: string };
+}
+
 function execAsync(command: string, options?: { cwd?: string }): Promise<string> {
   return new Promise((resolve, reject) => {
-    exec(command, { cwd: options?.cwd, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`${error.message}\n${stderr}`));
-        return;
+    exec(
+      command,
+      { cwd: options?.cwd, maxBuffer: 1024 * 1024, env: getShellEnv() },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`${error.message}\n${stderr}`));
+          return;
+        }
+        resolve(stdout.trim());
       }
-      resolve(stdout.trim());
-    });
+    );
   });
 }
 

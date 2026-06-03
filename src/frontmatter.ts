@@ -24,8 +24,11 @@ export interface FrontmatterResult {
 
 function stripHashFromTags(tags: unknown): string[] | undefined {
   if (!Array.isArray(tags)) return undefined;
-  if (tags.length === 0) return undefined;
-  return (tags as string[]).map((t) => String(t).replace(/^#/, ""));
+  const stripped = (tags as string[])
+    .map((t) => String(t).replace(/^#/, ""))
+    .filter((t) => t.trim() !== "" && t !== "null" && t !== "undefined");
+  if (stripped.length === 0) return undefined;
+  return stripped;
 }
 
 function pickCaseInsensitive(
