@@ -4,7 +4,7 @@ import { App } from "obsidian";
 import type { BlogPublisherSettings } from "./settings";
 import { slugify, log, notify, notifyError } from "./utils";
 import { parseAndTransformFrontmatter, replaceFrontmatter } from "./frontmatter";
-import { processAttachments } from "./attachments";
+import { processAttachments, processWikiLinks } from "./attachments";
 
 export interface SyncResult {
   synced: number;
@@ -42,7 +42,9 @@ function syncFile(
   sourceFilePath: string,
   fullFilename: string,
   targetFolderPath: string,
-  assetsPath: string
+  assetsPath: string,
+  vaultPagesPath: string,
+  folderMappings: FolderMapping[]
 ): { errors: string[]; synced: boolean } {
   const filename = fullFilename.replace(/\.md$/, "");
   const targetDirname = slugify(filename);
@@ -76,9 +78,15 @@ function syncFile(
     targetDirPath
   );
 
-  fs.writeFileSync(targetFilePath, processedContent, "utf-8");
+  const { content: linkedContent, errors: linkErrors } = processWikiLinks(
+    processedContent,
+    vaultPagesPath,
+    folderMappings
+  );
 
-  return { errors: [...fmErrors, ...attErrors], synced: true };
+  fs.writeFileSync(targetFilePath, linkedContent, "utf-8");
+
+  return { errors: [...fmErrors, ...attErrors, ...linkErrors], synced: true };
 }
 
 function cleanupDeletedSources(
@@ -151,7 +159,9 @@ export async function syncVaultToBlog(
         sourceFilePath,
         fullFilename,
         targetFolderPath,
-        assetsPath
+        assetsPath,
+        settings.vaultPagesPath,
+        settings.folderMappings
       );
 
       if (errors.length > 0) {
