@@ -7,7 +7,7 @@ export interface TransformedFrontmatter {
   published: string;
   series?: string;
   tags?: string[];
-  github?: string;
+  github?: string[];
   description?: string;
   draft?: boolean;
   author?: string;
@@ -95,7 +95,14 @@ export function parseAndTransformFrontmatter(
 
   const github = pickCaseInsensitive(rawFrontmatter, "github");
   if (github) {
-    newFrontmatter.github = String(github);
+    if (Array.isArray(github)) {
+      const filtered = (github as string[]).filter((v) => String(v).trim() !== "");
+      if (filtered.length > 0) {
+        newFrontmatter.github = filtered.map((v) => String(v));
+      }
+    } else if (String(github).trim() !== "") {
+      newFrontmatter.github = [String(github)];
+    }
   }
 
   const description = pickCaseInsensitive(rawFrontmatter, "description");
