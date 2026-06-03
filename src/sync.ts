@@ -38,13 +38,29 @@ function listTargetSlugDirs(targetFolderPath: string): Set<string> {
   );
 }
 
+function cleanupDeletedSources(
+  targetFolderPath: string,
+  syncedSlugs: Set<string>
+): number {
+  const existingSlugs = listTargetSlugDirs(targetFolderPath);
+  let deleted = 0;
+  for (const slug of existingSlugs) {
+    if (!syncedSlugs.has(slug)) {
+      const dirPath = path.join(targetFolderPath, slug);
+      fs.rmSync(dirPath, { recursive: true, force: true });
+      log(`Deleted stale directory: ${slug}`);
+      deleted++;
+    }
+  }
+  return deleted;
+}
+
 function syncFile(
   sourceFilePath: string,
   fullFilename: string,
   targetFolderPath: string,
   assetsPath: string,
-  vaultPagesPath: string,
-  folderMappings: FolderMapping[]
+  vaultPagesPath: string
 ): { errors: string[]; synced: boolean } {
   const filename = fullFilename.replace(/\.md$/, "");
   const targetDirname = slugify(filename);
@@ -80,32 +96,12 @@ function syncFile(
 
   const { content: linkedContent, errors: linkErrors } = processWikiLinks(
     processedContent,
-    vaultPagesPath,
-    folderMappings
+    vaultPagesPath
   );
 
   fs.writeFileSync(targetFilePath, linkedContent, "utf-8");
 
   return { errors: [...fmErrors, ...attErrors, ...linkErrors], synced: true };
-}
-
-function cleanupDeletedSources(
-  targetFolderPath: string,
-  syncedSlugs: Set<string>
-): number {
-  const existingSlugs = listTargetSlugDirs(targetFolderPath);
-  let deleted = 0;
-
-  for (const slug of existingSlugs) {
-    if (!syncedSlugs.has(slug)) {
-      const dirPath = path.join(targetFolderPath, slug);
-      fs.rmSync(dirPath, { recursive: true, force: true });
-      log(`Deleted stale directory: ${slug}`);
-      deleted++;
-    }
-  }
-
-  return deleted;
 }
 
 export async function syncVaultToBlog(
@@ -123,7 +119,7 @@ export async function syncVaultToBlog(
 
   const pagesPath = path.join(vaultPath, settings.vaultPagesPath);
   const assetsPath = path.join(vaultPath, settings.vaultAssetsPath);
-  const contentPath = path.join(settings.blogRepoPath, "src", "content");
+  const blogContentPath = path.join(settings.blogRepoPath, "src", "content", "blog");
 
   if (!fs.existsSync(pagesPath)) {
     notifyError(`Pages path not found: ${pagesPath}`);
@@ -131,54 +127,34 @@ export async function syncVaultToBlog(
     return result;
   }
 
-  if (!fs.existsSync(contentPath)) {
-    notifyError(`Content path not found: ${contentPath}`);
-    result.errors.push(`Content path not found: ${contentPath}`);
-    return result;
-  }
+  fs.mkdirSync(blogContentPath, { recursive: true });
 
-  for (const mapping of settings.folderMappings) {
-    if (!mapping.sourceFolder || !mapping.targetFolder) continue;
+  const files = listMarkdownFiles(pagesPath);
+  const allSyncedSlugs = new Set<string>();
 
-    const sourceFolderPath = path.join(pagesPath, mapping.sourceFolder);
-    const targetFolderPath = path.join(contentPath, mapping.targetFolder);
+  for (const fullFilename of files) {
+    const sourceFilePath = path.join(pagesPath, fullFilename);
+    const { errors, synced } = syncFile(
+      sourceFilePath,
+      fullFilename,
+      blogContentPath,
+      assetsPath,
+      settings.vaultPagesPath
+    );
 
-    if (!fs.existsSync(sourceFolderPath)) {
-      log(`Source folder not found, skipping: ${sourceFolderPath}`);
-      continue;
+    if (errors.length > 0) {
+      result.errors.push(...errors);
     }
 
-    fs.mkdirSync(targetFolderPath, { recursive: true });
-
-    const files = listMarkdownFiles(sourceFolderPath);
-    const syncedSlugs = new Set<string>();
-
-    for (const fullFilename of files) {
-      const sourceFilePath = path.join(sourceFolderPath, fullFilename);
-      const { errors, synced } = syncFile(
-        sourceFilePath,
-        fullFilename,
-        targetFolderPath,
-        assetsPath,
-        settings.vaultPagesPath,
-        settings.folderMappings
-      );
-
-      if (errors.length > 0) {
-        result.errors.push(...errors);
-      }
-
-      if (synced) {
-        result.synced++;
-        syncedSlugs.add(slugify(fullFilename.replace(/\.md$/, "")));
-      } else {
-        result.skipped++;
-        syncedSlugs.add(slugify(fullFilename.replace(/\.md$/, "")));
-      }
+    if (synced) {
+      result.synced++;
+    } else {
+      result.skipped++;
     }
-
-    result.deleted += cleanupDeletedSources(targetFolderPath, syncedSlugs);
+    allSyncedSlugs.add(slugify(fullFilename.replace(/\.md$/, "")));
   }
+
+  result.deleted = cleanupDeletedSources(blogContentPath, allSyncedSlugs);
 
   if (result.errors.length > 0) {
     const errorSummary = result.errors.join("\n");

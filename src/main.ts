@@ -1,4 +1,4 @@
-import { Plugin, TFile } from "obsidian";
+import { Notice, Plugin, TFile } from "obsidian";
 import {
   BlogPublisherSettings,
   DEFAULT_SETTINGS,
@@ -10,6 +10,7 @@ import { publish } from "./publish";
 
 const BLOG_TEMPLATE = `---
 published: {{date}}
+type: article
 CTF:
 Part:
 Github:
@@ -91,9 +92,14 @@ export default class BlogPublisherPlugin extends Plugin {
   }
 
   private async runSync() {
-    const result = await syncVaultToBlog(this.app, this.settings);
-    if (result.errors.length === 0) {
-      await startPreview(this.settings);
+    try {
+      const result = await syncVaultToBlog(this.app, this.settings);
+      if (result.errors.length === 0) {
+        await startPreview(this.settings);
+      }
+    } catch (err) {
+      console.error("[Blog Publisher] Sync failed:", err);
+      new Notice(`Blog Publisher: Sync failed — ${(err as Error).message}`, 8000);
     }
   }
 

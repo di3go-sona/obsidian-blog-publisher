@@ -5,6 +5,7 @@ const FRONTMATTER_REGEX = /^---\r?\n([\s\S]*?)\r?\n---/;
 export interface TransformedFrontmatter {
   title: string;
   published: string;
+  type: string;
   series?: string;
   tags?: string[];
   github?: string[];
@@ -65,7 +66,13 @@ export function parseAndTransformFrontmatter(
   const newFrontmatter: TransformedFrontmatter = {
     title: filename,
     published: "",
+    type: "article",
   };
+
+  const type = pickCaseInsensitive(rawFrontmatter, "type");
+  if (type && String(type).trim() !== "") {
+    newFrontmatter.type = String(type).trim();
+  }
 
   const published = pickCaseInsensitive(rawFrontmatter, "published")
     ?? pickCaseInsensitive(rawFrontmatter, "Created");
@@ -89,8 +96,8 @@ export function parseAndTransformFrontmatter(
 
   const tags = pickCaseInsensitive(rawFrontmatter, "tags");
   const stripped = stripHashFromTags(tags);
-  if (stripped) {
-    newFrontmatter.tags = stripped;
+  if (stripped && stripped.length > 0 && stripped.some((t) => t.trim() !== "")) {
+    newFrontmatter.tags = stripped.filter((t) => t.trim() !== "");
   }
 
   const github = pickCaseInsensitive(rawFrontmatter, "github");
@@ -125,7 +132,21 @@ export function parseAndTransformFrontmatter(
     newFrontmatter.toc = Boolean(toc);
   }
 
-  const yamlStr = stringifyYaml(newFrontmatter as Record<string, unknown>);
+  const output: Record<string, unknown> = {
+    title: newFrontmatter.title,
+    published: newFrontmatter.published,
+    type: newFrontmatter.type,
+  };
+
+  if (newFrontmatter.series !== undefined) output.series = newFrontmatter.series;
+  if (newFrontmatter.tags && newFrontmatter.tags.length > 0) output.tags = newFrontmatter.tags;
+  if (newFrontmatter.github && newFrontmatter.github.length > 0) output.github = newFrontmatter.github;
+  if (newFrontmatter.description !== undefined) output.description = newFrontmatter.description;
+  if (newFrontmatter.draft !== undefined) output.draft = newFrontmatter.draft;
+  if (newFrontmatter.author !== undefined) output.author = newFrontmatter.author;
+  if (newFrontmatter.toc !== undefined) output.toc = newFrontmatter.toc;
+
+  const yamlStr = stringifyYaml(output);
   const newFrontmatterStr = `---\n${yamlStr}---\n`;
 
   return { newFrontmatter, originalMatch, newFrontmatterStr, errors };

@@ -1,17 +1,11 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type BlogPublisherPlugin from "./main";
 
-export interface FolderMapping {
-  sourceFolder: string;
-  targetFolder: string;
-}
-
 export interface BlogPublisherSettings {
   blogRepoPath: string;
   vaultPagesPath: string;
   vaultDraftsPath: string;
   vaultAssetsPath: string;
-  folderMappings: FolderMapping[];
   previewPort: number;
 }
 
@@ -20,11 +14,6 @@ export const DEFAULT_SETTINGS: BlogPublisherSettings = {
   vaultPagesPath: "Pages/🖋️ Blog",
   vaultDraftsPath: "Pages/✏️ Blog Drafts",
   vaultAssetsPath: "Assets",
-  folderMappings: [
-    { sourceFolder: "Articles", targetFolder: "articles" },
-    { sourceFolder: "Writeups", targetFolder: "writeups" },
-    { sourceFolder: "Projects", targetFolder: "projects" },
-  ],
   previewPort: 4321,
 };
 
@@ -109,52 +98,5 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
             }
           })
       );
-
-    containerEl.createEl("h3", { text: "Folder mappings" });
-    containerEl.createEl("p", {
-      text: "Maps Obsidian subfolders under the pages path to Astro content subfolders under src/content/",
-      cls: "setting-item-description",
-    });
-
-    this.plugin.settings.folderMappings.forEach((mapping, index) => {
-      const s = new Setting(containerEl)
-        .addText((text) =>
-          text
-            .setPlaceholder("Obsidian folder")
-            .setValue(mapping.sourceFolder)
-            .onChange(async (value) => {
-              this.plugin.settings.folderMappings[index].sourceFolder = value;
-              await this.plugin.saveSettings();
-            })
-        )
-        .addText((text) =>
-          text
-            .setPlaceholder("Astro folder")
-            .setValue(mapping.targetFolder)
-            .onChange(async (value) => {
-              this.plugin.settings.folderMappings[index].targetFolder = value;
-              await this.plugin.saveSettings();
-            })
-        )
-        .addExtraButton((btn) =>
-          btn.setIcon("trash").onClick(async () => {
-            this.plugin.settings.folderMappings.splice(index, 1);
-            await this.plugin.saveSettings();
-            this.display();
-          })
-        );
-      s.infoEl.remove();
-    });
-
-    new Setting(containerEl).addButton((btn) =>
-      btn.setButtonText("Add mapping").onClick(async () => {
-        this.plugin.settings.folderMappings.push({
-          sourceFolder: "",
-          targetFolder: "",
-        });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
   }
 }
