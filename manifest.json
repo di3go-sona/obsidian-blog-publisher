@@ -1,0 +1,9 @@
+{
+  "id": "obsidian-blog-publisher",
+  "name": "Blog Publisher",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Sync Obsidian notes to Astro blog, preview in Docker, and publish via git",
+  "author": "di3go-sona",
+  "isDesktopOnly": true
+}
