@@ -11,11 +11,11 @@ import { publish } from "./publish";
 const BLOG_TEMPLATE = `---
 published: {{date}}
 type: article
-CTF:
-Part:
-Github:
+ctf:
+part:
+github:
   -
-Tags:
+tags:
   -
 ---
 `;
