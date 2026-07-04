@@ -1,7 +1,10 @@
 import { Notice } from "obsidian";
 
 export function slugify(filename: string): string {
-  return filename.toLowerCase().replace(/ /g, "-");
+  return filename
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 export function log(msg: string): void {
