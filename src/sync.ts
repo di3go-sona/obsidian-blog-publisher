@@ -5,6 +5,7 @@ import type { BlogPublisherSettings } from "./settings";
 import { slugify, log, notify, notifyError } from "./utils";
 import { parseAndTransformFrontmatter, replaceFrontmatter } from "./frontmatter";
 import { processAttachments, processWikiLinks } from "./attachments";
+import { checkAmbiguousOrdering } from "./validate";
 
 export interface SyncResult {
   synced: number;
@@ -61,7 +62,7 @@ function syncFile(
   targetFolderPath: string,
   assetsPath: string,
   vaultPagesPath: string
-): { errors: string[]; synced: boolean } {
+): { errors: string[]; synced: boolean; frontmatter?: { series?: string; published: string; part?: number } } {
   const filename = fullFilename.replace(/\.md$/, "");
   const targetDirname = slugify(filename);
   const targetDirPath = path.join(targetFolderPath, targetDirname);
@@ -70,14 +71,33 @@ function syncFile(
   const sourceMtime = getMtime(sourceFilePath);
   const targetMtime = getMtime(targetFilePath);
 
+  // Skip only if target is newer AND frontmatter matches
+  // (iCloud sync can mess with mtimes, so we verify content too)
+  let needsSync = true;
   if (targetMtime > 0 && sourceMtime <= targetMtime) {
+    try {
+      const targetContent = fs.readFileSync(targetFilePath, "utf-8");
+      const { newFrontmatterStr: expectedFm } =
+        parseAndTransformFrontmatter(
+          fs.readFileSync(sourceFilePath, "utf-8"),
+          filename
+        );
+      if (targetContent.startsWith(expectedFm)) {
+        needsSync = false;
+      }
+    } catch {
+      // If comparison fails, err on the side of syncing
+    }
+  }
+
+  if (!needsSync) {
     return { errors: [], synced: false };
   }
 
   log(`Syncing: ${fullFilename}`);
 
   const fileContent = fs.readFileSync(sourceFilePath, "utf-8");
-  const { originalMatch, newFrontmatterStr, errors: fmErrors } =
+  const { originalMatch, newFrontmatterStr, newFrontmatter, errors: fmErrors } =
     parseAndTransformFrontmatter(fileContent, filename);
 
   if (fmErrors.length > 0 && !originalMatch) {
@@ -101,7 +121,15 @@ function syncFile(
 
   fs.writeFileSync(targetFilePath, linkedContent, "utf-8");
 
-  return { errors: [...fmErrors, ...attErrors, ...linkErrors], synced: true };
+  return {
+    errors: [...fmErrors, ...attErrors, ...linkErrors],
+    synced: true,
+    frontmatter: {
+      series: newFrontmatter.series,
+      published: newFrontmatter.published,
+      part: newFrontmatter.part,
+    },
+  };
 }
 
 export async function syncVaultToBlog(
@@ -131,10 +159,11 @@ export async function syncVaultToBlog(
 
   const files = listMarkdownFiles(pagesPath);
   const allSyncedSlugs = new Set<string>();
+  const syncedFrontmatter: { filename: string; series?: string; published: string; part?: number }[] = [];
 
   for (const fullFilename of files) {
     const sourceFilePath = path.join(pagesPath, fullFilename);
-    const { errors, synced } = syncFile(
+    const { errors, synced, frontmatter } = syncFile(
       sourceFilePath,
       fullFilename,
       blogContentPath,
@@ -148,11 +177,22 @@ export async function syncVaultToBlog(
 
     if (synced) {
       result.synced++;
+      if (frontmatter) {
+        syncedFrontmatter.push({
+          filename: fullFilename.replace(/\.md$/, ""),
+          series: frontmatter.series,
+          published: frontmatter.published,
+          part: frontmatter.part,
+        });
+      }
     } else {
       result.skipped++;
     }
     allSyncedSlugs.add(slugify(fullFilename.replace(/\.md$/, "")));
   }
+
+  const ambiguityErrors = checkAmbiguousOrdering(syncedFrontmatter);
+  result.errors.push(...ambiguityErrors);
 
   result.deleted = cleanupDeletedSources(blogContentPath, allSyncedSlugs);
 

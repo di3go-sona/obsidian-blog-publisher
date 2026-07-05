@@ -11,8 +11,7 @@ import { publish } from "./publish";
 const BLOG_TEMPLATE = `---
 published: {{date}}
 type: article
-ctf:
-part:
+series:
 github:
   -
 tags:

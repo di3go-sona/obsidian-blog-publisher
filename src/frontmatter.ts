@@ -7,6 +7,7 @@ export interface TransformedFrontmatter {
   published: string;
   type: string;
   series?: string;
+  part?: number;
   tags?: string[];
   github?: string[];
   description?: string;
@@ -85,15 +86,16 @@ export function parseAndTransformFrontmatter(
     errors.push(`${filename}: missing "published" field in frontmatter`);
   }
 
-  const hasPart =
-    hasKeyCaseInsensitive(rawFrontmatter, "part") ||
-    hasKeyCaseInsensitive(rawFrontmatter, "Part");
-  if (hasPart) {
-    const ctfValue = pickCaseInsensitive(rawFrontmatter, "ctf");
-    if (ctfValue) {
-      newFrontmatter.series = String(ctfValue);
-    } else {
-      errors.push(`${filename}: has "Part" but no "CTF" field`);
+  const seriesValue = pickCaseInsensitive(rawFrontmatter, "series");
+  if (seriesValue) {
+    newFrontmatter.series = String(seriesValue);
+  }
+
+  const partValue = pickCaseInsensitive(rawFrontmatter, "part");
+  if (partValue !== undefined) {
+    const parsed = Number(partValue);
+    if (!Number.isNaN(parsed)) {
+      newFrontmatter.part = parsed;
     }
   }
 
@@ -142,6 +144,7 @@ export function parseAndTransformFrontmatter(
   };
 
   if (newFrontmatter.series !== undefined) output.series = newFrontmatter.series;
+  if (newFrontmatter.part !== undefined) output.part = newFrontmatter.part;
   if (newFrontmatter.tags && newFrontmatter.tags.length > 0) output.tags = newFrontmatter.tags;
   if (newFrontmatter.github && newFrontmatter.github.length > 0) output.github = newFrontmatter.github;
   if (newFrontmatter.description !== undefined) output.description = newFrontmatter.description;
